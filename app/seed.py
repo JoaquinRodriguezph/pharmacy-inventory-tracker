@@ -1,4 +1,5 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 import random
 from faker import Faker
 from db import get_connection
@@ -174,13 +175,11 @@ def seed_stock(cur):
                 batch_number = f"B{product_id:03d}-{n}"
                 reorder_level = 30
 
-                # 15% low stock (0 to 30), 85% normal stock (50 to 200)
                 if random.random() < 0.15:
                     quantity = random.randint(0, 30)
                 else:
                     quantity = random.randint(50, 200)
 
-                # ~3% expired, ~10% near expiry (30-60 days), ~87% standard (90-730 days)
                 p = random.random()
                 if p < 0.03:
                     days_delta = random.randint(-60, -1)
@@ -209,6 +208,58 @@ def seed_stock(cur):
     )
 
 
+def seed_sales(cur):
+    cur.execute("SELECT branch_id FROM branches ORDER BY branch_id")
+    branch_ids = [row[0] for row in cur.fetchall()]
+
+    cur.execute("SELECT product_id, unit_price FROM products")
+    products = cur.fetchall()
+
+    product_map = {pid: price for pid, price in products}
+    product_id_list = list(product_map.keys())
+
+    popularity_weights = [random.choice([1, 1, 1, 3, 10]) for _ in product_id_list]
+
+    for _ in range(700):
+        branch_id = random.choices(branch_ids, weights=[40, 30, 20, 10])[0]
+        sale_time = datetime.now() - timedelta(seconds=random.randint(0, 365 * 24 * 3600))
+
+        num_items = random.randint(1, 5)
+
+        # Draw weighted candidates iteratively until we have `num_items` unique products to prevent duplicate lines in a single sale.
+        selected_product_ids = set()
+        while len(selected_product_ids) < num_items:
+            drawn_pid = random.choices(product_id_list, weights=popularity_weights, k=1)[0]
+            selected_product_ids.add(drawn_pid)
+
+        sale_items_data = []
+        total = Decimal("0.00")
+
+        for pid in selected_product_ids:
+            quantity = random.randint(1, 5)
+            unit_price = product_map[pid]
+            total += unit_price * quantity
+            sale_items_data.append((pid, quantity, unit_price))
+
+        cur.execute(
+            "INSERT INTO sales (sale_time, total, branch_id) VALUES (%s, %s, %s) RETURNING sale_id",
+            (sale_time, total, branch_id),
+        )
+        sale_id = cur.fetchone()[0]
+
+        sale_items_rows = [
+            (sale_id, pid, qty, price)
+            for pid, qty, price in sale_items_data
+        ]
+        cur.executemany(
+            """
+            INSERT INTO sale_items (sale_id, product_id, quantity, unit_price)
+            VALUES (%s, %s, %s, %s)
+            """,
+            sale_items_rows,
+        )
+
+
 def main():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -219,6 +270,7 @@ def main():
             seed_suppliers(cur)
             seed_products(cur)
             seed_stock(cur)
+            seed_sales(cur)
 
 
 if __name__ == "__main__":
