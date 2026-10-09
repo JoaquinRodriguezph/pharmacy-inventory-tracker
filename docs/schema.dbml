@@ -1,0 +1,49 @@
+Table branches {
+  branch_id int [pk, increment, note: 'identifies the branch']
+  name text [not null]
+  city text 
+  address text
+}
+
+Table suppliers {
+  supplier_id int [pk, increment, note: 'identifies the supplier']
+  name text [not null]
+  contact_info text
+}
+
+Table products {
+  product_id int [pk, increment, note: 'identifies the product']
+  name text [not null]
+  category text
+  unit_price numeric(10,2) [not null]
+  supplier_id int [not null, ref: > suppliers.supplier_id]
+}
+
+Table stock {
+  stock_id int [pk, increment, note: 'identifies the stock']
+  quantity int [not null]
+  expiry_date date [not null]
+  reorder_level int
+  batch_number text [not null]
+  branch_id int [not null, ref: > branches.branch_id]
+  product_id int [not null, ref: > products.product_id]
+
+  indexes {
+    (branch_id, product_id, batch_number) [unique]
+  }
+}
+
+Table sales {
+  sale_id int [pk, increment, note: 'identifies the sale']
+  sale_time timestamp [not null]
+  total numeric(10,2) [not null]
+  branch_id int [not null, ref: > branches.branch_id]
+}
+
+Table sale_items {
+  sale_item_id int [pk, increment, note: 'identifies the sale line']
+  quantity int [not null]
+  unit_price numeric(10,2) [not null]
+  product_id int [not null, ref: > products.product_id]
+  sale_id int [not null, ref: > sales.sale_id]
+}
