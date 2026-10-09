@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 import random
 from faker import Faker
 from db import get_connection
@@ -46,7 +47,6 @@ def seed_products(cur):
     cur.execute("SELECT supplier_id FROM suppliers")
     supplier_ids = [row[0] for row in cur.fetchall()]
 
-    # 6 categories with 10 items each totaling exactly 60 distinct products
     catalog = {
         "Prescription": {
             "price_range": (15.00, 120.00),
@@ -157,6 +157,58 @@ def seed_products(cur):
     )
 
 
+def seed_stock(cur):
+    cur.execute("SELECT branch_id FROM branches")
+    branch_ids = [row[0] for row in cur.fetchall()]
+
+    cur.execute("SELECT product_id FROM products")
+    product_ids = [row[0] for row in cur.fetchall()]
+
+    today = date.today()
+    stock_entries = []
+
+    for branch_id in branch_ids:
+        for product_id in product_ids:
+            num_batches = random.randint(1, 4)
+            for n in range(1, num_batches + 1):
+                batch_number = f"B{product_id:03d}-{n}"
+                reorder_level = 30
+
+                # 15% low stock (0 to 30), 85% normal stock (50 to 200)
+                if random.random() < 0.15:
+                    quantity = random.randint(0, 30)
+                else:
+                    quantity = random.randint(50, 200)
+
+                # ~3% expired, ~10% near expiry (30-60 days), ~87% standard (90-730 days)
+                p = random.random()
+                if p < 0.03:
+                    days_delta = random.randint(-60, -1)
+                elif p < 0.13:
+                    days_delta = random.randint(30, 60)
+                else:
+                    days_delta = random.randint(90, 730)
+
+                expiry_date = today + timedelta(days=days_delta)
+
+                stock_entries.append((
+                    branch_id,
+                    product_id,
+                    batch_number,
+                    quantity,
+                    expiry_date,
+                    reorder_level,
+                ))
+
+    cur.executemany(
+        """
+        INSERT INTO stock (branch_id, product_id, batch_number, quantity, expiry_date, reorder_level)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        """,
+        stock_entries,
+    )
+
+
 def main():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -166,6 +218,7 @@ def main():
             seed_branches(cur)
             seed_suppliers(cur)
             seed_products(cur)
+            seed_stock(cur)
 
 
 if __name__ == "__main__":
