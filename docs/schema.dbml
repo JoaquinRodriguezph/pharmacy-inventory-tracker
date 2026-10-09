@@ -21,9 +21,9 @@ Table products {
 
 Table stock {
   stock_id int [pk, increment, note: 'identifies the stock']
-  quantity int [not null]
+  quantity int [not null, default: 0]
   expiry_date date [not null]
-  reorder_level int
+  reorder_level int [not null, default: 0]
   batch_number text [not null]
   branch_id int [not null, ref: > branches.branch_id]
   product_id int [not null, ref: > products.product_id]

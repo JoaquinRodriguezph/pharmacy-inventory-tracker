@@ -18,9 +18,9 @@ supplier_id | INT | FK | → suppliers.supplier_id
 
 Stock
 stock_id | INT | PK | identifies the stock
-quantity      | INT | - |
-expiry_date      | DATE | - |
-reorder_level      | INT | - |
+quantity      | INT | - | default 0
+expiry_date      | DATE | - | 
+reorder_level      | INT | - | default 0
 batch_number | TEXT | - |
 branch_id  | INT | FK | -> branches.branch_id
 product_id  | INT | FK | → products.product_id
