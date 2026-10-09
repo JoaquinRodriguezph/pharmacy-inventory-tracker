@@ -43,12 +43,6 @@ sale_id | INT | FK | -> sales.sale_id
 products.supplier_id → suppliers.supplier_id
 stock.branch_id → branches.branch_id
 stock.product_id -> products.product_id
-sales.branch_id -> branches.branch_d
+sales.branch_id -> branches.branch_id
 sale_items.product_id -> products.product_id
 sale_items.sale_id -> sales.sale_id
-
-2.) It's because one sale has many products. If you put all products in each sale, it would break normalization rules.
-
-4.) No. Stock would need to have multiple rows. Each row would represent a batch and an extra column would be needed, e.g. batch number, to identify which batch the product is a part of. For each branch and product, there should be no duplicate batch number.
-
-5.) I think products should store the unit price. Sale_items should store its own unit price as well because the price might change.
