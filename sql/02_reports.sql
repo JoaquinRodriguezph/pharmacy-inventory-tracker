@@ -105,3 +105,20 @@ WHERE rank_in_branch <= 5
 ORDER BY 
     branch_name,
     rank_in_branch;
+
+-- Report 5: Monthly sales summary per branch
+SELECT 
+    b.name AS branch_name,
+    DATE_TRUNC('month', s.sale_time)::date AS month,
+    COUNT(s.sale_id) AS sales_count,
+    SUM(s.total) AS total_revenue,
+    ROUND(AVG(s.total), 2) AS avg_sale_value
+FROM sales s
+JOIN branches b 
+    ON s.branch_id = b.branch_id
+GROUP BY 
+    b.branch_id,
+    DATE_TRUNC('month', s.sale_time)::date
+ORDER BY 
+    branch_name,
+    month;
