@@ -1,3 +1,4 @@
+-- Report 1: Products that are below their reorder level in each branch
 SELECT 
     b.name AS branch_name,
     p.name AS product_name,
@@ -39,3 +40,23 @@ WHERE s.quantity > 0
   AND s.expiry_date <= CURRENT_DATE + 60
 ORDER BY 
     s.expiry_date ASC;
+
+-- Report 3: Sales totals and revenue per branch and product
+SELECT 
+    b.name AS branch_name,
+    p.name AS product_name,
+    SUM(si.quantity) AS units_sold,
+    SUM(si.quantity * si.unit_price) AS revenue
+FROM sale_items si
+JOIN sales s 
+    ON si.sale_id = s.sale_id
+JOIN branches b 
+    ON s.branch_id = b.branch_id
+JOIN products p 
+    ON si.product_id = p.product_id
+GROUP BY 
+    b.branch_id,
+    p.product_id
+ORDER BY 
+    branch_name,
+    units_sold DESC;
