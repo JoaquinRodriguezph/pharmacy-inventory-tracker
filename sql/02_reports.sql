@@ -60,3 +60,48 @@ GROUP BY
 ORDER BY 
     branch_name,
     units_sold DESC;
+
+-- Report 4: Top 5 best-selling products per branch by units sold
+WITH totals AS (
+    SELECT 
+        b.branch_id,
+        b.name AS branch_name,
+        p.name AS product_name,
+        SUM(si.quantity) AS units_sold,
+        SUM(si.quantity * si.unit_price) AS revenue
+    FROM sale_items si
+    JOIN sales s 
+        ON si.sale_id = s.sale_id
+    JOIN branches b 
+        ON s.branch_id = b.branch_id
+    JOIN products p 
+        ON si.product_id = p.product_id
+    GROUP BY 
+        b.branch_id,
+        p.product_id
+),
+ranked AS (
+    SELECT 
+        branch_id,
+        branch_name,
+        product_name,
+        units_sold,
+        revenue,
+        -- Break ties on units_sold by revenue DESC to prioritize higher financial value and ensure deterministic ranking
+        ROW_NUMBER() OVER (
+            PARTITION BY branch_id 
+            ORDER BY units_sold DESC, revenue DESC
+        ) AS rank_in_branch
+    FROM totals
+)
+SELECT 
+    branch_name,
+    product_name,
+    units_sold,
+    revenue,
+    rank_in_branch
+FROM ranked
+WHERE rank_in_branch <= 5
+ORDER BY 
+    branch_name,
+    rank_in_branch;
