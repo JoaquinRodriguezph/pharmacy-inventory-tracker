@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.db import get_dict_connection
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="Pharmacy Inventory API")
 
@@ -100,3 +101,5 @@ def get_restock(branch_id: int):
         with conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
+
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
