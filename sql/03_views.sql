@@ -31,3 +31,45 @@ JOIN branches b
 GROUP BY 
     b.branch_id,
     DATE_TRUNC('month', s.sale_time)::date;
+
+-- View 3: Top 5 best-selling products per branch based on units sold and revenue
+CREATE OR REPLACE VIEW v_top_sellers AS
+WITH totals AS (
+    SELECT 
+        b.branch_id,
+        b.name AS branch_name,
+        p.name AS product_name,
+        SUM(si.quantity) AS units_sold,
+        SUM(si.quantity * si.unit_price) AS revenue
+    FROM sale_items si
+    JOIN sales s 
+        ON si.sale_id = s.sale_id
+    JOIN branches b 
+        ON s.branch_id = b.branch_id
+    JOIN products p 
+        ON si.product_id = p.product_id
+    GROUP BY 
+        b.branch_id,
+        p.product_id
+),
+ranked AS (
+    SELECT 
+        branch_id,
+        branch_name,
+        product_name,
+        units_sold,
+        revenue,
+        ROW_NUMBER() OVER (
+            PARTITION BY branch_id 
+            ORDER BY units_sold DESC, revenue DESC
+        ) AS rank_in_branch
+    FROM totals
+)
+SELECT 
+    branch_name,
+    product_name,
+    units_sold,
+    revenue,
+    rank_in_branch
+FROM ranked
+WHERE rank_in_branch <= 5;
