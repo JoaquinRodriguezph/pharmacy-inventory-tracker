@@ -44,12 +44,56 @@ def test_restock_list_only_includes_products_below_reorder_level(cur):
 
 
 def test_expiring_batches_respects_day_window(cur):
+    # Insert explicit test batch to eliminate dependence on random seed data
+    cur.execute(
+        """
+        INSERT INTO stock (
+            branch_id,
+            product_id,
+            batch_number,
+            quantity,
+            reorder_level,
+            expiry_date
+        )
+        VALUES (%s, %s, %s, %s, %s, CURRENT_DATE + 10);
+        """,
+        (1, 1, "TEST-EXP", 10, 30),
+    )
+
     cur.execute("SELECT * FROM fn_expiring_batches(%s, %s)", (1, 30))
     rows = cur.fetchall()
-    assert len(rows) > 0
+
+    test_row = next((r for r in rows if r["batch_number"] == "TEST-EXP"), None)
+    assert test_row is not None
+    assert test_row["days_left"] == 10
+
     for row in rows:
         assert 0 <= row["days_left"] <= 30
         assert row["quantity"] > 0
+
+
+def test_expiring_batches_excludes_batches_beyond_window(cur):
+    # Insert a batch outside the 30-day window to test boundary exclusion
+    cur.execute(
+        """
+        INSERT INTO stock (
+            branch_id,
+            product_id,
+            batch_number,
+            quantity,
+            reorder_level,
+            expiry_date
+        )
+        VALUES (%s, %s, %s, %s, %s, CURRENT_DATE + 45);
+        """,
+        (1, 1, "TEST-OUTSIDE-EXP", 10, 30),
+    )
+
+    cur.execute("SELECT * FROM fn_expiring_batches(%s, %s)", (1, 30))
+    rows = cur.fetchall()
+
+    outside_row = next((r for r in rows if r["batch_number"] == "TEST-OUTSIDE-EXP"), None)
+    assert outside_row is None
 
 
 def test_check_constraint_rejects_negative_stock(cur):
