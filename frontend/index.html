@@ -3,33 +3,44 @@
 <head>
   <meta charset="UTF-8">
   <title>Pharmacy Inventory Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body {
       font-family: system-ui, -apple-system, sans-serif;
       margin: 2rem;
       color: #333;
+      max-width: 1200px;
     }
 
     .controls {
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
     }
 
     select {
-      padding: 6px 10px;
+      padding: 6px 12px;
       font-size: 14px;
       border: 1px solid #ccc;
       border-radius: 4px;
     }
 
-    #status {
-      font-weight: 500;
-      margin: 1rem 0;
+    .status-msg {
+      font-style: italic;
+      color: #666;
+      margin: 0.5rem 0;
+    }
+
+    .chart-container {
+      position: relative;
+      width: 100%;
+      max-width: 900px;
+      margin: 1.5rem 0;
     }
 
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 0.5rem;
+      margin-bottom: 2rem;
     }
 
     th, td {
@@ -51,102 +62,293 @@
       color: #c62828;
       font-weight: 600;
     }
+
+    tr.critical-expiry {
+      background-color: #fff3e0;
+      color: #e65100;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <h1>Pharmacy Inventory Dashboard</h1>
 
   <div class="controls">
-    <label for="branch-select">Filter by Branch: </label>
+    <label for="branch-select"><strong>Select Branch:</strong> </label>
     <select id="branch-select">
       <option value="">All branches</option>
     </select>
   </div>
 
-  <p id="status">Loading data...</p>
+  <section>
+    <h2>Monthly Sales Revenue</h2>
+    <div class="chart-container">
+      <canvas id="monthly-chart"></canvas>
+    </div>
+  </section>
 
-  <table id="low-stock-table">
-    <thead>
-      <tr>
-        <th>Branch</th>
-        <th>Product</th>
-        <th>Supplier</th>
-        <th>Batch</th>
-        <th>Quantity</th>
-        <th>Reorder Level</th>
-      </tr>
-    </thead>
-    <tbody id="low-stock-body"></tbody>
-  </table>
+  <section>
+    <h2>Low-Stock Batches</h2>
+    <p id="low-stock-status" class="status-msg">Loading...</p>
+    <table id="low-stock-table">
+      <thead>
+        <tr>
+          <th>Branch</th>
+          <th>Product</th>
+          <th>Supplier</th>
+          <th>Batch</th>
+          <th>Quantity</th>
+          <th>Reorder Level</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 id="expiring-heading">Expiring Batches (Next 60 Days)</h2>
+    <p id="expiring-status" class="status-msg">Select a branch to see expiring batches.</p>
+    <table id="expiring-table" style="display: none;">
+      <thead>
+        <tr>
+          <th>Product</th>
+          <th>Batch</th>
+          <th>Quantity</th>
+          <th>Expiry Date</th>
+          <th>Days Left</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Top 5 Best-Selling Products</h2>
+    <p id="top-sellers-status" class="status-msg">Loading...</p>
+    <table id="top-sellers-table">
+      <thead>
+        <tr>
+          <th>Branch</th>
+          <th>Rank</th>
+          <th>Product</th>
+          <th>Units Sold</th>
+          <th>Revenue</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
 
   <script>
     const branchSelect = document.getElementById("branch-select");
-    const statusText = document.getElementById("status");
-    const tableBody = document.getElementById("low-stock-body");
+    let monthlyChartInstance = null;
+
+    const chartColors = [
+      "rgb(54, 162, 235)",
+      "rgb(255, 99, 132)",
+      "rgb(75, 192, 192)",
+      "rgb(255, 159, 64)"
+    ];
+
+    function renderTableRows(tableSelector, rows, columnExtractors, rowClassFn = null) {
+      const tbody = document.querySelector(`${tableSelector} tbody`);
+      tbody.textContent = "";
+
+      rows.forEach(item => {
+        const tr = document.createElement("tr");
+        if (rowClassFn) {
+          const className = rowClassFn(item);
+          if (className) tr.classList.add(className);
+        }
+
+        columnExtractors.forEach(extract => {
+          const td = document.createElement("td");
+          td.textContent = extract(item);
+          tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+      });
+    }
 
     function loadLowStock(branchId) {
-      statusText.textContent = "Loading low-stock items...";
+      const status = document.getElementById("low-stock-status");
+      status.textContent = "Loading...";
 
-      let url = "/reports/low-stock";
-      if (branchId) {
-        url += `?branch_id=${encodeURIComponent(branchId)}`;
-      }
+      const url = branchId ? `/reports/low-stock?branch_id=${encodeURIComponent(branchId)}` : "/reports/low-stock";
 
       fetch(url)
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
-          tableBody.textContent = "";
-
-          data.forEach(item => {
-            const tr = document.createElement("tr");
-
-            if (item.quantity === 0) {
-              tr.classList.add("out-of-stock");
-            }
-
-            const fields = [
-              item.branch_name,
-              item.product_name,
-              item.supplier_name,
-              item.batch_number,
-              item.quantity,
-              item.reorder_level
-            ];
-
-            fields.forEach(val => {
-              const td = document.createElement("td");
-              td.textContent = val;
-              tr.appendChild(td);
-            });
-
-            tableBody.appendChild(tr);
-          });
-
-          statusText.textContent = `Showing ${data.length} low-stock batches`;
+          renderTableRows(
+            "#low-stock-table",
+            data,
+            [
+              i => i.branch_name,
+              i => i.product_name,
+              i => i.supplier_name,
+              i => i.batch_number,
+              i => i.quantity,
+              i => i.reorder_level
+            ],
+            i => (i.quantity === 0 ? "out-of-stock" : null)
+          );
+          status.textContent = `Showing ${data.length} low-stock batches`;
         })
         .catch(err => {
-          statusText.textContent = "Failed to load low-stock batches.";
+          status.textContent = "Failed to load low-stock data.";
           console.error(err);
         });
     }
 
+    function loadExpiringBatches(branchId, branchName) {
+      const heading = document.getElementById("expiring-heading");
+      const status = document.getElementById("expiring-status");
+      const table = document.getElementById("expiring-table");
+
+      if (!branchId) {
+        heading.textContent = "Expiring Batches (Next 60 Days)";
+        status.textContent = "Select a branch to see expiring batches.";
+        status.style.display = "block";
+        table.style.display = "none";
+        return;
+      }
+
+      heading.textContent = `Expiring Batches (Next 60 Days) - ${branchName}`;
+      status.textContent = "Loading...";
+      status.style.display = "block";
+
+      fetch(`/reports/expiring?branch_id=${encodeURIComponent(branchId)}&days=60`)
+        .then(r => r.json())
+        .then(data => {
+          renderTableRows(
+            "#expiring-table",
+            data,
+            [
+              i => i.product_name,
+              i => i.batch_number,
+              i => i.quantity,
+              i => i.expiry_date,
+              i => i.days_left
+            ],
+            i => (i.days_left <= 14 ? "critical-expiry" : null)
+          );
+          status.style.display = "none";
+          table.style.display = "table";
+        })
+        .catch(err => {
+          status.textContent = "Failed to load expiring batches.";
+          console.error(err);
+        });
+    }
+
+    function loadTopSellers(branchName) {
+      const status = document.getElementById("top-sellers-status");
+      status.textContent = "Loading...";
+
+      const url = branchName ? `/reports/top-sellers?branch_name=${encodeURIComponent(branchName)}` : "/reports/top-sellers";
+
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          renderTableRows(
+            "#top-sellers-table",
+            data,
+            [
+              i => i.branch_name,
+              i => i.rank_in_branch,
+              i => i.product_name,
+              i => i.units_sold,
+              i => Number(i.revenue).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            ]
+          );
+          status.textContent = `Showing top products (${data.length} entries)`;
+        })
+        .catch(err => {
+          status.textContent = "Failed to load top sellers.";
+          console.error(err);
+        });
+    }
+
+    function loadMonthlySalesChart(branchName) {
+      const url = branchName ? `/reports/monthly-sales?branch_name=${encodeURIComponent(branchName)}` : "/reports/monthly-sales";
+
+      fetch(url)
+        .then(r => r.json())
+        .then(data => {
+          const labels = [...new Set(data.map(d => d.month))].sort();
+
+          const grouped = {};
+          data.forEach(d => {
+            if (!grouped[d.branch_name]) grouped[d.branch_name] = {};
+            grouped[d.branch_name][d.month] = Number(d.total_revenue);
+          });
+
+          const datasets = Object.keys(grouped).map((bName, idx) => ({
+            label: bName,
+            data: labels.map(m => grouped[bName][m] || 0),
+            borderColor: chartColors[idx % chartColors.length],
+            backgroundColor: chartColors[idx % chartColors.length],
+            tension: 0.2,
+            fill: false
+          }));
+
+          if (monthlyChartInstance) {
+            monthlyChartInstance.destroy();
+          }
+
+          const ctx = document.getElementById("monthly-chart").getContext("2d");
+          monthlyChartInstance = new Chart(ctx, {
+            type: "line",
+            data: { labels, datasets },
+            options: {
+              responsive: true,
+              plugins: {
+                tooltip: {
+                  callbacks: {
+                    label: context => `${context.dataset.label}: ₱${Number(context.raw).toLocaleString("en-PH", { minimumFractionDigits: 2 })}`
+                  }
+                }
+              },
+              scales: {
+                y: {
+                  beginAtZero: true,
+                  ticks: {
+                    callback: val => "₱" + Number(val).toLocaleString("en-PH")
+                  }
+                }
+              }
+            }
+          });
+        })
+        .catch(err => console.error("Failed to load monthly sales data:", err));
+    }
+
+    function refreshAll() {
+      const branchId = branchSelect.value;
+      const branchName = branchId ? branchSelect.selectedOptions[0].text : null;
+
+      loadLowStock(branchId);
+      loadExpiringBatches(branchId, branchName);
+      loadTopSellers(branchName);
+      loadMonthlySalesChart(branchName);
+    }
+
     fetch("/branches")
-      .then(response => response.json())
+      .then(r => r.json())
       .then(branches => {
         branches.forEach(b => {
-          const option = document.createElement("option");
-          option.value = b.branch_id;
-          option.textContent = b.name;
-          branchSelect.appendChild(option);
+          const opt = document.createElement("option");
+          opt.value = b.branch_id;
+          opt.textContent = b.name;
+          branchSelect.appendChild(opt);
         });
       })
       .catch(err => console.error("Failed to load branches:", err));
 
-    branchSelect.addEventListener("change", (e) => {
-      loadLowStock(e.target.value);
-    });
+    branchSelect.addEventListener("change", refreshAll);
 
-    loadLowStock("");
+    refreshAll();
   </script>
 </body>
 </html>
