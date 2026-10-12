@@ -38,3 +38,34 @@ def get_low_stock(branch_id: int | None = None):
         with conn.cursor() as cur:
             cur.execute(query, params)
             return cur.fetchall()
+
+
+@app.get("/reports/monthly-sales")
+def get_monthly_sales(branch_name: str | None = None):
+    query = """
+        SELECT branch_name, month, sales_count, total_revenue, avg_sale_value
+        FROM v_monthly_sales
+    """
+    params = ()
+
+    if branch_name is not None:
+        query += " WHERE branch_name = %s"
+        params = (branch_name,)
+
+    query += " ORDER BY branch_name, month"
+
+    with get_dict_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
+
+
+@app.get("/reports/expiring")
+def get_expiring_batches(branch_id: int, days: int = 60):
+    query = "SELECT * FROM fn_expiring_batches(%s, %s)"
+    params = (branch_id, days)
+
+    with get_dict_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            return cur.fetchall()
