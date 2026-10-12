@@ -3,30 +3,150 @@
 <head>
   <meta charset="UTF-8">
   <title>Pharmacy Inventory Dashboard</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 2rem;
+      color: #333;
+    }
+
+    .controls {
+      margin-bottom: 1rem;
+    }
+
+    select {
+      padding: 6px 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    #status {
+      font-weight: 500;
+      margin: 1rem 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f4f5f7;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    tr.out-of-stock {
+      background-color: #ffebee;
+      color: #c62828;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
   <h1>Pharmacy Inventory Dashboard</h1>
-  <p id="status">Loading...</p>
-  <ul id="branch-list"></ul>
+
+  <div class="controls">
+    <label for="branch-select">Filter by Branch: </label>
+    <select id="branch-select">
+      <option value="">All branches</option>
+    </select>
+  </div>
+
+  <p id="status">Loading data...</p>
+
+  <table id="low-stock-table">
+    <thead>
+      <tr>
+        <th>Branch</th>
+        <th>Product</th>
+        <th>Supplier</th>
+        <th>Batch</th>
+        <th>Quantity</th>
+        <th>Reorder Level</th>
+      </tr>
+    </thead>
+    <tbody id="low-stock-body"></tbody>
+  </table>
 
   <script>
-    fetch("/branches")
-      .then(r => r.json())
-      .then(data => {
-        document.getElementById("status").textContent =
-          "Loaded " + data.length + " branches";
+    const branchSelect = document.getElementById("branch-select");
+    const statusText = document.getElementById("status");
+    const tableBody = document.getElementById("low-stock-body");
 
-        const list = document.getElementById("branch-list");
-        data.forEach(b => {
-          const li = document.createElement("li");
-          li.textContent = b.name;
-          list.appendChild(li);
+    function loadLowStock(branchId) {
+      statusText.textContent = "Loading low-stock items...";
+
+      let url = "/reports/low-stock";
+      if (branchId) {
+        url += `?branch_id=${encodeURIComponent(branchId)}`;
+      }
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          tableBody.textContent = "";
+
+          data.forEach(item => {
+            const tr = document.createElement("tr");
+
+            if (item.quantity === 0) {
+              tr.classList.add("out-of-stock");
+            }
+
+            const fields = [
+              item.branch_name,
+              item.product_name,
+              item.supplier_name,
+              item.batch_number,
+              item.quantity,
+              item.reorder_level
+            ];
+
+            fields.forEach(val => {
+              const td = document.createElement("td");
+              td.textContent = val;
+              tr.appendChild(td);
+            });
+
+            tableBody.appendChild(tr);
+          });
+
+          statusText.textContent = `Showing ${data.length} low-stock batches`;
+        })
+        .catch(err => {
+          statusText.textContent = "Failed to load low-stock batches.";
+          console.error(err);
+        });
+    }
+
+    fetch("/branches")
+      .then(response => response.json())
+      .then(branches => {
+        branches.forEach(b => {
+          const option = document.createElement("option");
+          option.value = b.branch_id;
+          option.textContent = b.name;
+          branchSelect.appendChild(option);
         });
       })
-      .catch(err => {
-        document.getElementById("status").textContent = "Failed to load branches";
-        console.error(err);
-      });
+      .catch(err => console.error("Failed to load branches:", err));
+
+    branchSelect.addEventListener("change", (e) => {
+      loadLowStock(e.target.value);
+    });
+
+    loadLowStock("");
   </script>
 </body>
 </html>
