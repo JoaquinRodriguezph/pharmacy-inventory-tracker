@@ -6,7 +6,8 @@ SELECT
     sup.name AS supplier_name,
     s.batch_number AS batch_number,
     s.quantity AS quantity,
-    s.reorder_level AS reorder_level
+    s.reorder_level AS reorder_level,
+    s.branch_id AS branch_id
 FROM stock s
 JOIN branches b 
     ON s.branch_id = b.branch_id
